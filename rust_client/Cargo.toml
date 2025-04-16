@@ -1,0 +1,16 @@
+[package]
+name = "rust_client"
+version = "0.1.0"
+edition = "2021"
+authors = ["Quin Darcy <pohmsuindraguli@gmail.com>"]
+description = "An introductory guide to calling C functions from Rust with FFI bindings."
+license = "MIT"
+repository = "https://github.com/Quin-Darcy/rust-c-ffi-guide"
+readme = "../README.md"
+keywords = ["ffi", "tutorial", "guide", "c", "bindings"]
+categories = ["development-tools", "external-ffi-bindings"]
+
+[dependencies]
+
+[build-dependencies]
+bindgen = { version = "0.69.1", features = ["experimental"] }
