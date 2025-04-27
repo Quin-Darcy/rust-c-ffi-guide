@@ -518,8 +518,8 @@ To prevent these auto-traits, we can use the zero-sized type to mark the `Buffer
 use std::marker::PhantomData;
 
 struct Buffer {
-    ptr: *mut ::std::os::raw::c_char,
-    size: usize,
+    /* Same members as before */
+
     // This phantom data prevents automatic Send/Sync implementation
     _marker: PhantomData<*const ()>,
 }
