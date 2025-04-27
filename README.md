@@ -413,9 +413,9 @@ struct Buffer {
 Unlike the `Buffer` struct in the previous example, where our members had types which assured the type primatives matched across the FFI boundary, we don't need to do that explicitly here.
 
 Instead, we use Rust's `Vec` type which has the following advantages:
-- It guarantees 
-
-we neither need a pointer nor to stre the size alongside it. This is becuase the Rust `Vec` type carries with it both pieces of information. Moreover, because we are dealing with a buffer whose size is determined at runtime, the most idiomatic Rust type for this purpose is `Vec`.
+- It guarantees the memory is contiguous.
+- Its size can be queried directly with `.len()`.
+- The `Drop` trait is automatically implemented and called when the Vec goes out of scope which frees it.
 
 *Note: For short-lived buffers, stack allocation with arrays instead of vectors might be prefereable.*
 
@@ -434,7 +434,7 @@ impl Buffer {
 
 The C function `fill_buffer` is expecting a char pointer (`char *`). In C, `char` is a 1-byte type often used to represent raw bytes. In Rust, `u8` is also a 1-byte type which means the memory layouts are compatible and this informs our choise of what type to populate our Rust-side buffer with.
 
-Moreover, `Vec<u8>` guarantees that its elements are stored continuously in memory, just like a C array. Further, we will see that in matching the memory layouts on the C and Rust sides, we can use Rust's `as_mut_ptr()` to geta  raw pointer to a contiguous sequence of bytes which is precisely what the C function expects.
+Additionally, we will see that in matching the memory layouts on the C and Rust sides, we can use Rust's `as_mut_ptr()` to get a raw pointer to a contiguous sequence of bytes which is precisely what the C function expects.
 
 Moving on, we add a safe method for actually filling the buffer and calling the FFI binding.
 ```rust
@@ -463,7 +463,23 @@ impl Buffer {
         }
     }
 }  
-``` 
+```
+
+This implementation maintains the following invariants:
+1. **Memory Management**: This invariant is maintained automatically by Rusts ownership system. When the `Buffer` instance goes out of scope, Rust will automatically dop the `Vec<u8>` inside it, which frees the memory properly.
+2. **Valid Pointers**: This invariant is SAtisfied because:
+    - `Vec<u8>` already guarantees the pointer is never null.
+    - Only one pointer is created temporarily within the `fill` method.
+    - The raw pointer is never exposed outside the `fill` method.
+3. **Size Consistency**: This invariant is maintained because:
+    - The `self.data.len()` is used to get the exact size of the buffer.
+    - Bounds checking is performed when converting to C integer type
+4. **Lifetime Management**: This invarinat is maintained becuase:
+    - The raw pointer only exists within the scope of `fill` method.
+    - The C function cannot keep a reference to the memory beyond the function call. *Note: this is only true because we happen to know the C `fill_buffer` does not store a copy or reference to our memory. If this is not known, this implementation would not necessarily uphold this invariant.*
+5. **Error Handling**: This invariant is maintained becuase:
+    - We properly check the return value from the C function call.
+    - We are converting between Rust and C types safely with error checking.
 
 #### Thread Safety
 There is one more invariant we must assure is maintained. That the memory pointed to by a raw C pointer has unknown sharing and thread-safety properties that Rust can't verify. That is, Rust cannot know if the C library is internally thread-safe, uses thread-local storage, if multiple threads can use the same buffer concurrently, or if the memory that the pointer refers to might be accessed or freed by other threads.
