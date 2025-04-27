@@ -281,7 +281,21 @@ mod bindings {
 fn main() {
     // Allocate a buffer
     let size = 20;
-    let mut buffer
+    let mut buffer = vec![0u8; size];
+
+    // Get mutable pointer to the buffer's data
+    let ptr = buffer.as_mut_ptr() as *mut ::std::os::raw::c_char;
+
+    // Call the FFI binding
+    let result = unsafe {
+        bindings::fill_buffer(ptr, size as ::std::os::raw::c_int)
+    };
+
+    if result >= 0 {
+        println!("Buffer successfully filled");
+    } else {
+        println!("Failed to fill buffer");
+    }
 }
 ```
 
