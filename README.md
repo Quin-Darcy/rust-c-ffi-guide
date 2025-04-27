@@ -327,7 +327,7 @@ In the subsequent sections, we will see how each of the invariants can be mainta
 #### Safe Abstractions for Library-Owned Memory
 Given our example code in the library-owned case, we can create a safe abstraction to wrap our unsafe code. Namely, we can create the following struct:
 ```rust
-/* File: examples/safe_library_owned.rs */
+/* File: rust_client/examples/safe_library_owned.rs */
 
 struct Buffer {
     ptr: *mut ::std::os::raw::c_char,
@@ -338,7 +338,7 @@ With this wrapper, we assure the type primatives match across the FFI boundary a
 
 Now with the `Buffer` struct defined, we can equip it with implementations that wrap the unsafe calls to the FFI bindings. We start with the constructor:
 ```rust
-/* File: examples/safe.rs */
+/* File: rust_client/examples/safe_library_owned.rs */
 
 impl Buffer {
     fn new(size: usize) -> Result<Self, String> {
@@ -364,7 +364,7 @@ This means that the **Valid Pointers** invariant is maintained as well as the **
 
 The next implementation we need is one to wrap the call to `fill_buffer`.
 ```rust
-/* File: examples/safe.rs */
+/* File: rust_client/examples/safe_library_owned.rs */
 
 impl Buffer {
     /* Same as before */
@@ -382,7 +382,7 @@ This implementation uses the stored size rather than requiring the caller to pro
 
 The last addition we make is a destructor for the `Buffer` struct. This will function as the safe wrapper around the call to `free_buffer` and is achieved through the `Drop` trait and writing an implementation for it for `Buffer` as follows:
 ```rust
-/* File: examples/safe.rs */
+/* File: rust_client/examples/safe_library_owned.rs */
 
 impl Drop for Buffer {
     fn drop(&mut self) {
@@ -465,6 +465,19 @@ impl Buffer {
 }  
 ```
 
+The last method we add is one that allows us to safely access the buffer
+```rust
+/* FilE: rust_client/examples/safe_caller_owned.rs */
+
+impl Buffer {
+    /* Same as before */
+
+    fn as_slice(&self) -> &[u8] {
+        &self.data
+    }
+}
+```
+
 This implementation maintains the following invariants:
 1. **Memory Management**: This invariant is maintained automatically by Rusts ownership system. When the `Buffer` instance goes out of scope, Rust will automatically dop the `Vec<u8>` inside it, which frees the memory properly.
 2. **Valid Pointers**: This invariant is SAtisfied because:
@@ -493,7 +506,8 @@ In Rust, most data types automatically have the `Send` and `Sync` traits impleme
 To prevent these auto-traits, we can use the zero-sized type to mark the `Buffer` struct to behave like a type that doesn't implement these traits. This looks like this:
 
 ```rust
-/* File: examples/safe.rs */
+/* File: rust_client/examples/safe_library_owned.rs */
+/* File: rust_client/examples/safe_caller_owned.rs */
 
 use std::marker::PhantomData;
 
