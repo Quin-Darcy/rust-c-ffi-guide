@@ -266,6 +266,7 @@ fn main() {
     }
 }
 ```
+TODO: Enumerate the issues with this approach.
 
 There are many issues with the above code. We will see how to write a much safer and more idiomatic version below.
 
@@ -298,6 +299,7 @@ fn main() {
     }
 }
 ```
+TODO: Enumerate the issues with this approach.
 
 ### Doing it All Safely
 There is no way around the fact that with Rust FFI bindings, the actual code which interfaces with the FFI will be unsafe since it is calling out to a function in a language which does not offer the same safety guarantees as the Rust compiler does for native Rust. The goal is then to safely encapsulate the foreign interfaces with wrappers.
@@ -305,19 +307,27 @@ There is no way around the fact that with Rust FFI bindings, the actual code whi
 #### Invariants
 An *invariant* is a property that must always hold. An example of an invariant in Rust is: refernces (using `&` and `&mut`) do not dangle and always point to valid data. Ultimately, invariants represent all the assumptions required for your code to be correct. For FFI bindings, the invariants associated with the foreign code *cannot* be checked by the Rust compiler. Therefore, one of the goals of the safe wrapper around the FFI binding is to make sure that all the invariants of the wrapped code are upheld.
 
-In our example code, the key invariants are the following:
+In the library-owned example code, the key invariants are the following:
 1. **Memory Management**: The buffer allocated by `allocate_buffer` must eventually be freed by `free_buffer` exactly once to avoid memory leaks or double-free errors.
 2. **Valid Pointers**: Only non-null pointers from `allocate_buffer` should be passed into `fill_buffer` and `free_buffer`.
 3. **Size Consistency**: The size paranmeter passed into `fill_buffer` must match the size used when allocating the buffer with `allocate_buffer`.
 4. **Lifetime Management**: The buffer must not be used after it's freed and must only be freed once.
 5. **Error Handling**: Return values must be properly checked and handled.
 
+In the caller-owned example, the key invariants are similar to those we saw in the previous case. Namely, 
+
+1. **Memory Management**: The buffer must be properly allocated and freed exactly once.
+2. **Valid Pointers**: The pointer derived from the Rust buffer must not be null.
+3. **Size Consistency**: The size passed to the C funcion must match the actual buffer size.
+4. **Lifetime Management**: The pointer must not be stored by the C function and used later on.
+5. **Error Handling**: Return valus from C functions must be properly checked and handled.
+
 In the subsequent sections, we will see how each of the invariants can be maintained.
 
 #### Safe Abstractions for Library-Owned Memory
-Given our example code, we can create a safe abstraction to wrap our unsafe code. Namely, we can create the following struct:
+Given our example code in the library-owned case, we can create a safe abstraction to wrap our unsafe code. Namely, we can create the following struct:
 ```rust
-/* File: examples/safe.rs */
+/* File: examples/safe_library_owned.rs */
 
 struct Buffer {
     ptr: *mut ::std::os::raw::c_char,
@@ -391,7 +401,69 @@ Implementing the `Drop` trait ensures:
 This means the **Memory Management** and **Lifetime Management** invariants are maintained.
 
 #### Safe Abstractions for Caller-Owned Memory
-TBD
+Similar to the library-owned example, we begin by creating a safe abstraction to wrap what we need to protect
+```rust
+/* File: rust_client/examples/safe_caller_owned.rs */
+
+struct Buffer {
+    data: Vec<u8>,
+}
+```
+
+Unlike the `Buffer` struct in the previous example, where our members had types which assured the type primatives matched across the FFI boundary, we don't need to do that explicitly here.
+
+Instead, we use Rust's `Vec` type which has the following advantages:
+- It guarantees 
+
+we neither need a pointer nor to stre the size alongside it. This is becuase the Rust `Vec` type carries with it both pieces of information. Moreover, because we are dealing with a buffer whose size is determined at runtime, the most idiomatic Rust type for this purpose is `Vec`.
+
+*Note: For short-lived buffers, stack allocation with arrays instead of vectors might be prefereable.*
+
+We move on to equip this struct with methods that will assure the invariants listed earlier are upheld. We start witht the constructor:
+```rust
+/* File: rust_client/examples/safe_caller_owned.rs */
+
+impl Buffer {
+    fn new(size: usize) -> Self {
+        Buffer {
+            data: vec![0u8; size],
+        }
+    }
+}
+```
+
+The C function `fill_buffer` is expecting a char pointer (`char *`). In C, `char` is a 1-byte type often used to represent raw bytes. In Rust, `u8` is also a 1-byte type which means the memory layouts are compatible and this informs our choise of what type to populate our Rust-side buffer with.
+
+Moreover, `Vec<u8>` guarantees that its elements are stored continuously in memory, just like a C array. Further, we will see that in matching the memory layouts on the C and Rust sides, we can use Rust's `as_mut_ptr()` to geta  raw pointer to a contiguous sequence of bytes which is precisely what the C function expects.
+
+Moving on, we add a safe method for actually filling the buffer and calling the FFI binding.
+```rust
+/* File: rust_client/examples/safe_caller_owned.rs */
+
+impl Buffer {
+    /* Same as before */
+
+    fn fill(&mut self) -> Result<(), String> {
+        // Convert usize to c_int with bounds checking
+        let c_size = ::std::os::raw::c_int::try_from(self.data.len())
+            .map_err(|_| "Size too large for C integer".to_string())?;
+
+        // Get mutable pointer to buffer's data
+        let ptr = self.data.as_mut_ptr() as *mut ::std::os::raw::c_char;
+
+        // Call FFI binding
+        let result = unsafe {
+            bindings::fill_buffer(ptr, c_size)
+        };        
+
+        // Error handle
+        match result {
+            n if n >= 0 => Ok(()),
+            _ => Err("Failed to fill buffer".to_string()),
+        }
+    }
+}  
+``` 
 
 #### Thread Safety
 There is one more invariant we must assure is maintained. That the memory pointed to by a raw C pointer has unknown sharing and thread-safety properties that Rust can't verify. That is, Rust cannot know if the C library is internally thread-safe, uses thread-local storage, if multiple threads can use the same buffer concurrently, or if the memory that the pointer refers to might be accessed or freed by other threads.
