@@ -1,4 +1,4 @@
-# Rust to C FFI Guide
+# Rust to C - FFI Guide
 
 ### Table of Contents
 - [Introduction](#introduction)
