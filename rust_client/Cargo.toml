@@ -11,6 +11,4 @@ keywords = ["ffi", "tutorial", "guide", "c", "bindings"]
 categories = ["development-tools", "external-ffi-bindings"]
 
 [dependencies]
-
-[build-dependencies]
-bindgen = { version = "0.69.1", features = ["experimental"] }
+co3 = "0.7.1"
