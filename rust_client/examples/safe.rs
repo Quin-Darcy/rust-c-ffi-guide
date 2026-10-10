@@ -1,10 +1,13 @@
 use core::{
-    ffi::{c_char, c_int},
     marker::PhantomData,
     ptr::NonNull,
 };
 
-use co3::{rust_spec::RustSpec, ReprC};
+use co3::{
+    ffi::{c_char, c_int},
+    rust_spec::RustSpec,
+    ReprC,
+};
 
 // Define a module to encapsulate the FFI binding declared with CO3.
 // This isolates it from the rest of the crate and prevents namespace pollution.
@@ -53,7 +56,7 @@ impl Buffer {
         let ptr = bindings::allocate_buffer(c_size)
             .ok_or("Failed to allocate buffer".to_string())?;
 
-        let slice = NonNull::slice_from_raw_parts(ptr, c_size as usize);
+        let slice = NonNull::slice_from_raw_parts(ptr, c_size.try_into().unwrap());
         let data = NonNull::new(slice.as_ptr() as *mut BufferDst).unwrap();
 
         Ok(Buffer { data, _marker: PhantomData })
@@ -62,7 +65,7 @@ impl Buffer {
     fn fill(&mut self) -> Result<(), String> {
         let result = unsafe { BufferDst::fill(self.data) };
         match result {
-            n if n >= 0 => Ok(()),
+            n if n >= c_int::new(0) => Ok(()),
             _ => Err("Invalid arguments were provided".to_string()),
         }
     }
@@ -73,7 +76,7 @@ impl Buffer {
 impl Drop for Buffer {
     fn drop(&mut self) {
         let result = unsafe { bindings::free_buffer(self.data.cast()) };
-        if result != 0 {
+        if result != c_int::new(0) {
             eprintln!("Warning! Failed to free buffer");
         }
     }

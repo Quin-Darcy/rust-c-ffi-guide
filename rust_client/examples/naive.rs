@@ -1,9 +1,8 @@
 // Define a module to encapsulate the FFI binding declared with CO3.
 // This isolates it from the rest of the crate and prevents namespace pollution.
-use core::{
-    ffi::{c_char, c_int},
-    ptr::NonNull,
-};
+use core::ptr::NonNull;
+
+use co3::ffi::{c_char, c_int};
 
 mod bindings {
     use super::*;
@@ -33,7 +32,7 @@ fn main() {
 
     // Call the FFI binding
     match unsafe { bindings::fill_buffer(buffer) } {
-        n if n >= 0 => {
+        n if n >= c_int::new(0) => {
             println!("Buffer successfully filled");
         },
         _ => {
@@ -43,7 +42,7 @@ fn main() {
 
     match unsafe { bindings::free_buffer(buffer.cast()) }
     {
-        0 => {
+        n if n == c_int::new(0) => {
             println!("Buffer successfully freed");
         },
         _ => {

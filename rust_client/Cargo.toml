@@ -11,4 +11,4 @@ keywords = ["ffi", "tutorial", "guide", "c", "bindings"]
 categories = ["development-tools", "external-ffi-bindings"]
 
 [dependencies]
-co3 = "0.6.0"
+co3 = "0.7.1"
